@@ -3,12 +3,13 @@
 import rospy
 import tf2_ros
 import numpy as np
+from std_msgs import Float64
 from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
 ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", "Abduction","ElbowPronosupination","ElbowFlexion"]
-TORSO_TF_NAME = "C7"
+TORSO_TF_NAME = "Frame_C7"
 
 class OcraAngles():
     def __init__(self):
@@ -27,7 +28,7 @@ class OcraAngles():
         rospy.Subscriber("/jointLimb", JointState, self.callbackLimb)
         self.right_arm_pub = rospy.Publisher('ocra/right_arm_angles', JointState, queue_size=10)
         self.left_arm_pub = rospy.Publisher('ocra/left_arm_angles', JointState, queue_size=10)
-        self.torso_pub = rospy.Publisher('ocra/torso', JointState, queue_size=10)
+        self.torso_pub = rospy.Publisher('ocra/torso', Float64, queue_size=10)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
@@ -56,7 +57,7 @@ class OcraAngles():
     def computeTorso(self):
         #Get Torso frame
         try:
-            tf = self.tfBuffer.lookup_transform(TORSO_TF_NAME, 'world', rospy.Time())
+            tf = self.tfBuffer.lookup_transform(TORSO_TF_NAME, 'world', rospy.Time(0))
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             return None
         
