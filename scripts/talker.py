@@ -8,8 +8,18 @@ from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
-ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", "Abduction","ElbowPronosupination","ElbowFlexion"]
+#Listen from
 TORSO_TF_NAME = "camera/Frame_C7"
+LIMBS_TOPIC = "camera/jointLimb"
+
+#Publish on
+RIGHT_ARM_TOPIC = "ocra/right_arm_angles"
+LEFT_ARM_TOPIC = "ocra/left_arm_angles"
+TORSO_TOPIC = "ocra/torso"
+
+#Angles names
+ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", 
+                    "Abduction","ElbowPronosupination","ElbowFlexion"]
 
 class OcraAngles():
     def __init__(self):
@@ -17,29 +27,33 @@ class OcraAngles():
         jointMessage.name = ARM_JOINTS_NAMES
         jointMessage.header.stamp = rospy.Time.now()
         jointMessage.position = None
-        jointMessage.velocity = None
-        jointMessage.effort   = None
+        jointMessage.velocity = [0.0,0.0,0.0,0.0,0.0] #does not matter
+        jointMessage.effort   = [0.0,0.0,0.0,0.0,0.0] #does not matter
 
         self.right_arm = jointMessage
         self.left_arm  = jointMessage
 
         self.torso = None
     
-        rospy.Subscriber("/jointLimb", JointState, self.callbackLimb)
-        self.right_arm_pub = rospy.Publisher('ocra/right_arm_angles', JointState, queue_size=10)
-        self.left_arm_pub = rospy.Publisher('ocra/left_arm_angles', JointState, queue_size=10)
-        self.torso_pub = rospy.Publisher('ocra/torso', Float64, queue_size=10)
+        rospy.Subscriber(LIMBS_TOPIC, JointState, self.callbackLimb)
+        self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
+        self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
+        self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
 
     def publishAngles(self):
-        if self.right_arm.position:
+        if self.right_arm.position != None:
             self.right_arm_pub.publish(self.right_arm)
             self.left_arm_pub.publish(self.left_arm)
         
         if self.torso != None:
             self.torso_pub.publish(self.torso)
+
+        self.right_arm.position = None
+        self.left_arm.position = None
+        self.torso = None
     
     def unit_vector(self,v):
         return (v / np.linalg.norm(v))
@@ -99,23 +113,25 @@ class OcraAngles():
             
             q1 = arm.position[0]
             if q1>=0:
-                frontal_elevation_flexion = q1
+                frontal_elevation_flexion = q1*180/np.pi
                 frontal_elevation_extension = 0
             else:
                 frontal_elevation_flexion = 0
-                frontal_elevation_extension = -q1
+                frontal_elevation_extension = -q1*180/np.pi
 
-            abduction = arm.position[1] #q2
-            elbow_pronosupination = np.abs(arm.position[2]) #q3
-            elbow_flexion = np.abs(arm.position[3]) #q4
+            abduction = arm.position[1]*180/np.pi #q2
+            elbow_pronosupination = np.abs(arm.position[2])*180/np.pi #q3
+            elbow_flexion = np.abs((np.abs(arm.position[3])*180/np.pi-270)) #q4 -> 0° when elbow is bent, olny positive values
 
-            position = [frontal_elevation_flexion,frontal_elevation_extension,abduction,elbow_pronosupination,elbow_flexion]
+            position = [frontal_elevation_flexion,frontal_elevation_extension,
+                                  abduction,elbow_pronosupination,elbow_flexion]
+
 
             if right_arm:
-                self.right_arm.positio = position
+                self.right_arm.position = position
                 self.right_arm.header = arm.header
             elif left_arm:
-                self.left_arm.positio = position
+                self.left_arm.position = position
                 self.left_arm.header = arm.header
             else:
                 raise Exception("Error in the arm's joints message")
