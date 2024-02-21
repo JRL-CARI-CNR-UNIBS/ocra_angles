@@ -1,0 +1,5 @@
+<launch>
+
+  <node name="ocra_angles" pkg="ocra_angles" type="talker.py"  output="screen" />
+
+</launch>

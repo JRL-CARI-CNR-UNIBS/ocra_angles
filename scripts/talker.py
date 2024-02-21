@@ -1,15 +1,15 @@
-#!/usr/bin/env python
+#! /usr/bin/env python3
 
 import rospy
 import tf2_ros
 import numpy as np
-from std_msgs import Float64
+from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
 ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", "Abduction","ElbowPronosupination","ElbowFlexion"]
-TORSO_TF_NAME = "Frame_C7"
+TORSO_TF_NAME = "camera/Frame_C7"
 
 class OcraAngles():
     def __init__(self):
@@ -41,37 +41,50 @@ class OcraAngles():
         if self.torso != None:
             self.torso_pub.publish(self.torso)
     
-    def unit_vector(v):
+    def unit_vector(self,v):
         return (v / np.linalg.norm(v))
 
     def project_onto_plane(self, v1, n):
         # Subtract from vector v1 its component along n, the normal vector to the plane
-        prj_n = np.dot(v1, self.unit_vector(n))
-        return [v1-prj_n]
+        unit_n = self.unit_vector(n)      
+        prj_n = np.dot(v1, unit_n)*unit_n
+        res = v1-prj_n
+
+        print("n: ",unit_n, "y: ",v1)
+        print("projection on n: ",prj_n)
+        print("res: ",res)
+
+        return res
     
     def angle_between_vectors(self, v1, v2):
         v1_u = self.unit_vector(v1)
         v2_u = self.unit_vector(v2)
-        return np.arccos(np.clip(np.dot(v1_u, v2_u)),-1.0, 1.0) 
+        return np.arccos(np.clip(np.dot(v1_u, v2_u),-1.0, 1.0))
 
     def computeTorso(self):
         #Get Torso frame
         try:
-            tf = self.tfBuffer.lookup_transform(TORSO_TF_NAME, 'world', rospy.Time(0))
+            tf = self.tfBuffer.lookup_transform('world',TORSO_TF_NAME,rospy.Time(0))
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             return None
         
+        print("Torso frame found->\n",tf)
+
         # Get vertical axis (y)
-        quat = tf.rotation
+        quat = tf.transform.rotation
         matrix = R.from_quat([quat.x,quat.y,quat.z,quat.w]).as_matrix()
         y = matrix[:,1]
 
-        y = np.vectorize(y)
+        y = np.array(y)
         n = np.array([1,0,0])
         z = np.array([0,0,1])
-        y_prj = self.project_onto_plane(self,y,n)
 
-        self.torso = self.angle_between_vectors(self,y_prj,z)
+        y_prj = self.project_onto_plane(y,n)
+
+        self.torso = self.angle_between_vectors(y_prj,z)*180/np.pi
+        
+        print("Torso angle: ",self.torso)
+        print("-------------------")
 
     def callbackLimb(self,arm):
             right_arm = False
@@ -108,14 +121,14 @@ class OcraAngles():
                 raise Exception("Error in the arm's joints message")
 
 
-if __name__ == '__main__':
-    rospy.init_node('ocra_angles', anonymous=True)
+if __name__ == "__main__":
+    rospy.init_node("ocra_angles", anonymous=True)
     ocra_angles = OcraAngles()
 
     rate = rospy.Rate(60)
     while not rospy.is_shutdown():
-        rospy.spin()
+        rate.sleep()
+
         ocra_angles.computeTorso()
         ocra_angles.publishAngles()
-        rate.sleep()
 
