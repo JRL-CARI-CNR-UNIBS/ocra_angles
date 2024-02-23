@@ -1,0 +1,16 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/riemann/projects/sharework_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/perception_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/control_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/third_parties_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/riemann/projects/sharework_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/perception_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/control_ws/devel/lib/python3/dist-packages",
+        "/home/riemann/projects/third_parties_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ]
+}

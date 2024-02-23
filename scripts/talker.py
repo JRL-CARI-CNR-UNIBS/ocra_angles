@@ -8,9 +8,19 @@ from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
-#Listen from
+# Camera namespace
 CAMERA = "camera2"
+
+# Tf
 TORSO_TF_NAME = CAMERA+"/neck"
+LEFT_SHOULDER_TF_NAME = CAMERA+"/left_shoulder"
+RIGHT_SHOULDER_TF_NAME = CAMERA+"/right_shoulder"
+LEFT_ELBOW_TF_NAME = CAMERA+"/left_shoulder_elbow"
+RIGHT_ELBOW_TF_NAME = CAMERA+"/right_shoulder_elbow"
+LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
+RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
+
+#Listen from
 LIMBS_TOPIC = "/"+CAMERA+"/limb_joint"
 
 #Publish on
@@ -21,8 +31,7 @@ LEFT_ARM_JOINT_PREFIX = "left_arm"
 RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
 #Angles names
-ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", 
-                    "Abduction","ElbowPronosupination","ElbowFlexion"]
+ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
 
 class OcraAngles():
     def __init__(self):
@@ -30,15 +39,15 @@ class OcraAngles():
         jointMessage.name = ARM_JOINTS_NAMES
         jointMessage.header.stamp = rospy.Time.now()
         jointMessage.position = None
-        jointMessage.velocity = [0.0,0.0,0.0,0.0,0.0] #does not matter
-        jointMessage.effort   = [0.0,0.0,0.0,0.0,0.0] #does not matter
+        jointMessage.velocity = [0.0,0.0,0.0,0.0] #does not matter
+        jointMessage.effort   = [0.0,0.0,0.0,0.0] #does not matter
 
         self.right_arm = jointMessage
         self.left_arm  = jointMessage
 
         self.torso = None
     
-        rospy.Subscriber(LIMBS_TOPIC, JointState, self.callbackLimb)
+        #rospy.Subscriber(LIMBS_TOPIC, JointState, self.callbackLimb)
         self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
         self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
         self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
@@ -57,6 +66,62 @@ class OcraAngles():
         self.right_arm.position = None
         self.left_arm.position = None
         self.torso = None
+
+    def computeAngles(self):
+        try:
+            tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time(0))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_left_elbow = None
+
+        try:
+            tf_right_elbow = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_ELBOW_TF_NAME,rospy.Time(0))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_right_elbow = None
+
+        try:
+            tf_left_wrist = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time(0))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_left_wrist = None
+
+        try:
+            tf_right_wrist = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time(0))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_right_wrist = None
+
+        # Left arm
+        if tf_left_elbow != None and tf_left_wrist != None:
+            left_frontal = self.computeFrontal(tf_left_elbow)
+            left_lateral = self.computeLateral(tf_left_elbow)
+            left_rotation = self.computeRotation(tf_left_wrist)
+            left_flexion = self.computeFlexion(tf_left_wrist)
+            left_arm = [left_frontal,left_lateral,left_rotation,left_flexion]
+            self.left_arm.position = left_arm
+        else:
+            self.left_arm.position = None
+
+        # Right arm
+        if tf_right_elbow != None and tf_right_wrist != None:
+            right_frontal = -self.computeFrontal(tf_right_elbow)
+            right_lateral = self.computeLateral(tf_right_elbow)
+            right_rotation = self.computeRotation(tf_right_wrist)
+            right_flexion = self.computeFlexion(tf_right_wrist)
+            right_arm = [right_frontal,right_lateral,right_rotation,right_flexion]
+            self.right_arm.position = right_arm
+        else:
+            self.right_arm.position = None
+        
+        # Torso
+        self.computeTorso()
+
+        # Publish
+        if self.left_arm.position != None:
+            self.left_arm_pub.publish(self.left_arm)
+
+        if self.right_arm.position != None:
+            self.right_arm_pub.publish(self.right_arm)
+        
+        if self.torso != None:
+            self.torso_pub.publish(self.torso)
     
     def unit_vector(self,v):
         return (v / np.linalg.norm(v))
@@ -141,21 +206,60 @@ class OcraAngles():
             else:
                 raise Exception("Error in the arm's joints message")
 
-    def computeFrontalElevation(self,tf_shoulder,tf_elbow):
+    def computeFrontal(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
-        v = tf_elbow.transform.position - tf_shoulder.transform.position
-        #Get y axis of tf_shoulder
-        quat = tf_shoulder.transform.rotation
-        matrix = R.from_quat([quat.x,quat.y,quat.z,quat.w]).as_matrix()
-        y = matrix[:,1]
-        y = np.array(y) 
+        v = tf_elbow_in_shoulder.transform.position
 
-        #Project the vector v onto the plane y-z
-        n = matrix[:,0] #x axis
-        v_prj = self.project_onto_plane(v,n)
-        #Get the angle between the projected vector and the y axis
-        y = -y #flip the y axis
+        #Project the vector on the y-z plane
+        x = np.array([1,0,0])
+        v_prj = self.project_onto_plane(v,x)
+
+        #Get the angle between the vector projected and the y axis
+        y = -np.array([0,1,0]) #towards the floor
         angle = self.angle_between_vectors(v_prj,y)
+
+        if(v_prj[2]<0):
+            angle = -angle
+
+        return angle*180/np.pi
+    
+    def computeLateral(self,tf_elbow_in_shoulder):
+        #Get the vector from shoulder to elbow
+        v = tf_elbow_in_shoulder.transform.position
+
+        #Project the vector on the y-z plane
+        z = np.array([0,0,1])
+        v_prj = self.project_onto_plane(v,z)
+
+        #Get the angle between the vector projected and the y axis
+        y = -np.array([0,1,0]) #towards the floor
+        angle = self.angle_between_vectors(v_prj,y)
+
+        return angle*180/np.pi
+    
+    def computeFlexion(self,tf_wrist_in_elbow):
+        #Get the vector from shoulder to elbow
+        v = tf_wrist_in_elbow.transform.position
+
+        #Project the vector on the y-z plane
+        z = np.array([0,0,1])
+        v_prj = self.project_onto_plane(v,z)
+
+        #Get the angle between the vector projected and the y axis
+        y = -np.array([0,1,0]) #towards the floor
+        angle = self.angle_between_vectors(v_prj,y)
+
+        return angle*180/np.pi
+    
+    def computeRotation(self,tf_wrist_in_shoulder):
+        #Get the vector from shoulder to elbow
+        matrix = tf_wrist_in_shoulder.transform.rotation
+        v = matrix[:,2] #wrist z axis emerging from the hand's torso
+
+        #Get the angle between the vector projected and the y axis
+        z = -np.array([0,0,1])
+        angle = self.angle_between_vectors(v,y)
+
         return angle*180/np.pi
 
 if __name__ == "__main__":
@@ -165,7 +269,4 @@ if __name__ == "__main__":
     rate = rospy.Rate(60)
     while not rospy.is_shutdown():
         rate.sleep()
-
-        ocra_angles.computeTorso()
-        ocra_angles.publishAngles()
-
+        ocra_angles.computeAngles()
