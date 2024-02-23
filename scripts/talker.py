@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
 # Camera namespace
-CAMERA = "camera2"
+CAMERA = "camera"
 
 # Tf
 TORSO_TF_NAME = CAMERA+"/neck"
@@ -208,7 +208,10 @@ class OcraAngles():
 
     def computeFrontal(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
-        v = tf_elbow_in_shoulder.transform.position
+        v = np.array([0,0,0])
+        v[0] = tf_elbow_in_shoulder.transform.translation.x
+        v[1] = tf_elbow_in_shoulder.transform.translation.y
+        v[2] = tf_elbow_in_shoulder.transform.translation.z
 
         #Project the vector on the y-z plane
         x = np.array([1,0,0])
@@ -225,7 +228,10 @@ class OcraAngles():
     
     def computeLateral(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
-        v = tf_elbow_in_shoulder.transform.position
+        v = np.array([0,0,0])
+        v[0] = tf_elbow_in_shoulder.transform.translation.x
+        v[1] = tf_elbow_in_shoulder.transform.translation.y
+        v[2] = tf_elbow_in_shoulder.transform.translation.z
 
         #Project the vector on the y-z plane
         z = np.array([0,0,1])
@@ -239,7 +245,10 @@ class OcraAngles():
     
     def computeFlexion(self,tf_wrist_in_elbow):
         #Get the vector from shoulder to elbow
-        v = tf_wrist_in_elbow.transform.position
+        v = np.array([0,0,0])
+        v[0] = tf_wrist_in_elbow.transform.translation.x
+        v[1] = tf_wrist_in_elbow.transform.translation.y
+        v[2] = tf_wrist_in_elbow.transform.translation.z
 
         #Project the vector on the y-z plane
         z = np.array([0,0,1])
@@ -253,12 +262,13 @@ class OcraAngles():
     
     def computeRotation(self,tf_wrist_in_shoulder):
         #Get the vector from shoulder to elbow
-        matrix = tf_wrist_in_shoulder.transform.rotation
+        quat = tf_wrist_in_shoulder.transform.rotation
+        matrix = R.from_quat([quat.x,quat.y,quat.z,quat.w]).as_matrix()
         v = matrix[:,2] #wrist z axis emerging from the hand's torso
 
         #Get the angle between the vector projected and the y axis
         z = -np.array([0,0,1])
-        angle = self.angle_between_vectors(v,y)
+        angle = self.angle_between_vectors(v,z)
 
         return angle*180/np.pi
 
