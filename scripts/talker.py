@@ -9,13 +9,16 @@ from scipy.spatial.transform import Rotation as R
 from visualization_msgs.msg import Marker, MarkerArray
 
 #Listen from
-TORSO_TF_NAME = "camera/Frame_C7"
-LIMBS_TOPIC = "camera/jointLimb"
+CAMERA = "camera2"
+TORSO_TF_NAME = CAMERA+"/neck"
+LIMBS_TOPIC = "/"+CAMERA+"/limb_joint"
 
 #Publish on
 RIGHT_ARM_TOPIC = "ocra/right_arm_angles"
 LEFT_ARM_TOPIC = "ocra/left_arm_angles"
 TORSO_TOPIC = "ocra/torso"
+LEFT_ARM_JOINT_PREFIX = "left_arm"
+RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
 #Angles names
 ARM_JOINTS_NAMES = ["FrontalElevationFlexion", "FrontalElevationExtension", 
@@ -104,9 +107,9 @@ class OcraAngles():
             right_arm = False
             left_arm = False
 
-            if "RightArm" in arm.name[0]:
+            if RIGHT_ARM_JOINT_PREFIX in arm.name[0]:
                 right_arm = True
-            elif "LeftArm" in arm.name[0]:
+            elif LEFT_ARM_JOINT_PREFIX in arm.name[0]:
                 left_arm = True
             else:
                 return 
@@ -125,7 +128,9 @@ class OcraAngles():
 
             position = [frontal_elevation_flexion,frontal_elevation_extension,
                                   abduction,elbow_pronosupination,elbow_flexion]
-
+            
+            print("right_arm: ",right_arm)
+            print("left_arm: ",left_arm)
 
             if right_arm:
                 self.right_arm.position = position
@@ -136,6 +141,22 @@ class OcraAngles():
             else:
                 raise Exception("Error in the arm's joints message")
 
+    def computeFrontalElevation(self,tf_shoulder,tf_elbow):
+        #Get the vector from shoulder to elbow
+        v = tf_elbow.transform.position - tf_shoulder.transform.position
+        #Get y axis of tf_shoulder
+        quat = tf_shoulder.transform.rotation
+        matrix = R.from_quat([quat.x,quat.y,quat.z,quat.w]).as_matrix()
+        y = matrix[:,1]
+        y = np.array(y) 
+
+        #Project the vector v onto the plane y-z
+        n = matrix[:,0] #x axis
+        v_prj = self.project_onto_plane(v,n)
+        #Get the angle between the projected vector and the y axis
+        y = -y #flip the y axis
+        angle = self.angle_between_vectors(v_prj,y)
+        return angle*180/np.pi
 
 if __name__ == "__main__":
     rospy.init_node("ocra_angles", anonymous=True)
