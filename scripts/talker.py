@@ -21,7 +21,7 @@ LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
 RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
 
 #Listen from
-LIMBS_TOPIC = "/"+CAMERA+"/limb_joint"
+# LIMBS_TOPIC = "/"+CAMERA+"/limb_joint"
 
 #Publish on
 RIGHT_ARM_TOPIC = "ocra/right_arm_angles"
@@ -55,17 +55,17 @@ class OcraAngles():
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
 
-    def publishAngles(self):
-        if self.right_arm.position != None:
-            self.right_arm_pub.publish(self.right_arm)
-            self.left_arm_pub.publish(self.left_arm)
+    # def publishAngles(self):
+    #     if self.right_arm.position != None:
+    #         self.right_arm_pub.publish(self.right_arm)
+    #         self.left_arm_pub.publish(self.left_arm)
         
-        if self.torso != None:
-            self.torso_pub.publish(self.torso)
+    #     if self.torso != None:
+    #         self.torso_pub.publish(self.torso)
 
-        self.right_arm.position = None
-        self.left_arm.position = None
-        self.torso = None
+    #     self.right_arm.position = None
+    #     self.left_arm.position = None
+    #     self.torso = None
 
     def computeAngles(self):
         try:
@@ -168,43 +168,43 @@ class OcraAngles():
         print("Torso angle: ",self.torso)
         print("-------------------")
 
-    def callbackLimb(self,arm):
-            right_arm = False
-            left_arm = False
+    # def callbackLimb(self,arm):
+    #         right_arm = False
+    #         left_arm = False
 
-            if RIGHT_ARM_JOINT_PREFIX in arm.name[0]:
-                right_arm = True
-            elif LEFT_ARM_JOINT_PREFIX in arm.name[0]:
-                left_arm = True
-            else:
-                return 
+    #         if RIGHT_ARM_JOINT_PREFIX in arm.name[0]:
+    #             right_arm = True
+    #         elif LEFT_ARM_JOINT_PREFIX in arm.name[0]:
+    #             left_arm = True
+    #         else:
+    #             return 
             
-            q1 = arm.position[0]
-            if q1>=0:
-                frontal_elevation_flexion = q1*180/np.pi
-                frontal_elevation_extension = 0
-            else:
-                frontal_elevation_flexion = 0
-                frontal_elevation_extension = -q1*180/np.pi
+    #         q1 = arm.position[0]
+    #         if q1>=0:
+    #             frontal_elevation_flexion = q1*180/np.pi
+    #             frontal_elevation_extension = 0
+    #         else:
+    #             frontal_elevation_flexion = 0
+    #             frontal_elevation_extension = -q1*180/np.pi
 
-            abduction = arm.position[1]*180/np.pi #q2
-            elbow_pronosupination = np.abs(arm.position[2])*180/np.pi #q3
-            elbow_flexion = np.abs((np.abs(arm.position[3])*180/np.pi-270)) #q4 -> 0° when elbow is bent, olny positive values
+    #         abduction = arm.position[1]*180/np.pi #q2
+    #         elbow_pronosupination = np.abs(arm.position[2])*180/np.pi #q3
+    #         elbow_flexion = np.abs((np.abs(arm.position[3])*180/np.pi-270)) #q4 -> 0° when elbow is bent, olny positive values
 
-            position = [frontal_elevation_flexion,frontal_elevation_extension,
-                                  abduction,elbow_pronosupination,elbow_flexion]
+    #         position = [frontal_elevation_flexion,frontal_elevation_extension,
+    #                               abduction,elbow_pronosupination,elbow_flexion]
             
-            print("right_arm: ",right_arm)
-            print("left_arm: ",left_arm)
+    #         print("right_arm: ",right_arm)
+    #         print("left_arm: ",left_arm)
 
-            if right_arm:
-                self.right_arm.position = position
-                self.right_arm.header = arm.header
-            elif left_arm:
-                self.left_arm.position = position
-                self.left_arm.header = arm.header
-            else:
-                raise Exception("Error in the arm's joints message")
+    #         if right_arm:
+    #             self.right_arm.position = position
+    #             self.right_arm.header = arm.header
+    #         elif left_arm:
+    #             self.left_arm.position = position
+    #             self.left_arm.header = arm.header
+    #         else:
+    #             raise Exception("Error in the arm's joints message")
 
     def computeFrontal(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
