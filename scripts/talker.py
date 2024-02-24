@@ -6,7 +6,6 @@ import numpy as np
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
-from visualization_msgs.msg import Marker, MarkerArray
 
 # Camera namespace
 CAMERA = "camera"
@@ -132,9 +131,9 @@ class OcraAngles():
         prj_n = np.dot(v1, unit_n)*unit_n
         res = v1-prj_n
 
-        print("n: ",unit_n, "y: ",v1)
-        print("projection on n: ",prj_n)
-        print("res: ",res)
+        # print("n: ",unit_n, "y: ",v1)
+        # print("projection on n: ",prj_n)
+        # print("res: ",res)
 
         return res
     
@@ -150,7 +149,7 @@ class OcraAngles():
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             return None
         
-        print("Torso frame found->\n",tf)
+        # print("Torso frame found->\n",tf)
 
         # Get vertical axis (y)
         quat = tf.transform.rotation
@@ -165,8 +164,8 @@ class OcraAngles():
 
         self.torso = self.angle_between_vectors(y_prj,z)*180/np.pi
         
-        print("Torso angle: ",self.torso)
-        print("-------------------")
+        # print("Torso angle: ",self.torso)
+        # print("-------------------")
 
     # def callbackLimb(self,arm):
     #         right_arm = False
@@ -208,10 +207,9 @@ class OcraAngles():
 
     def computeFrontal(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
-        v = np.array([0,0,0])
-        v[0] = tf_elbow_in_shoulder.transform.translation.x
-        v[1] = tf_elbow_in_shoulder.transform.translation.y
-        v[2] = tf_elbow_in_shoulder.transform.translation.z
+        v = np.array([tf_elbow_in_shoulder.transform.translation.x,
+                      tf_elbow_in_shoulder.transform.translation.y,
+                      tf_elbow_in_shoulder.transform.translation.z])
 
         #Project the vector on the y-z plane
         x = np.array([1,0,0])
@@ -228,10 +226,9 @@ class OcraAngles():
     
     def computeLateral(self,tf_elbow_in_shoulder):
         #Get the vector from shoulder to elbow
-        v = np.array([0,0,0])
-        v[0] = tf_elbow_in_shoulder.transform.translation.x
-        v[1] = tf_elbow_in_shoulder.transform.translation.y
-        v[2] = tf_elbow_in_shoulder.transform.translation.z
+        v = np.array([tf_elbow_in_shoulder.transform.translation.x,
+                      tf_elbow_in_shoulder.transform.translation.y,
+                      tf_elbow_in_shoulder.transform.translation.z])
 
         #Project the vector on the y-z plane
         z = np.array([0,0,1])
@@ -245,10 +242,9 @@ class OcraAngles():
     
     def computeFlexion(self,tf_wrist_in_elbow):
         #Get the vector from shoulder to elbow
-        v = np.array([0,0,0])
-        v[0] = tf_wrist_in_elbow.transform.translation.x
-        v[1] = tf_wrist_in_elbow.transform.translation.y
-        v[2] = tf_wrist_in_elbow.transform.translation.z
+        v = np.array([tf_wrist_in_elbow.transform.translation.x,
+                      tf_wrist_in_elbow.transform.translation.y,
+                      tf_wrist_in_elbow.transform.translation.z])
 
         #Project the vector on the y-z plane
         z = np.array([0,0,1])
