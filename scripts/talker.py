@@ -9,21 +9,22 @@ from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseArray, Transform, Vector3, TransformStamped
 import pandas as pd
 from datetime import datetime
+from os.path import exists, abspath
 
 
-np.float = float    
-np.int = int   #module 'numpy' has no attribute 'int'
-np.object = object    #module 'numpy' has no attribute 'object'
-np.bool = bool    #module 'numpy' has no attribute 'bool'
 
 #USER PARAMETERS
 BACK_INCLINATION_ERROR = 15.6 #degrees
 
 WRITE_TO_CSV = True
 
-LEFT_ARM_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_left_arm.csv"
-RIGHT_ARM_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_right_arm.csv"
-TORSO_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_torso.csv"
+DATE_STR = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
+PATH_TO_FILE = "/home/galois/projects/sharework_ws/src/ocra_angles/data/"
+LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_left_arm.csv"
+RIGHT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_right_arm.csv"
+TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_torso.csv"
+
+DELTA_T_TF = 1 # seconds
 
 # Camera namespace
 CAMERA = "camera2"
@@ -51,11 +52,6 @@ RIGHT_ARM_JOINT_PREFIX = "right_arm"
 #Angles names
 ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
 
-LEFT_ARM_CSV_HEADER = True
-RIGHT_ARM_CSV_HEADER = True
-TORSO_CSV_HEADER = True
-
-DELTA_T_TF = 1
 
 class OcraAngles():
     def __init__(self):
@@ -211,9 +207,8 @@ class OcraAngles():
                          'Left_rotation': [self.left_arm.position[2]], 'Left_flexion': [self.left_arm.position[3]]}
                 df = pd.DataFrame(data) 
                 df.insert(0, "Time", datetime.now())
-                global LEFT_ARM_CSV_HEADER
-                df.to_csv(LEFT_ARM_FILE_NAME, mode='a', index=False, header = LEFT_ARM_CSV_HEADER)
-                LEFT_ARM_CSV_HEADER = False
+                left_arm_csv_header = not exists(LEFT_ARM_FILE_NAME)
+                df.to_csv(LEFT_ARM_FILE_NAME, mode='a', index=False, header = left_arm_csv_header)
 
         if self.right_arm.position != None:
             self.right_arm_pub.publish(self.right_arm)
@@ -222,9 +217,8 @@ class OcraAngles():
                          'Right_rotation': [self.right_arm.position[2]], 'Right_flexion': [self.right_arm.position[3]]}
                 df = pd.DataFrame(data) 
                 df.insert(0, "Time", datetime.now())
-                global RIGHT_ARM_CSV_HEADER
-                df.to_csv(RIGHT_ARM_FILE_NAME, mode='a', index=False, header = RIGHT_ARM_CSV_HEADER)
-                RIGHT_ARM_CSV_HEADER = False
+                right_arm_csv_header = not exists(RIGHT_ARM_FILE_NAME)
+                df.to_csv(RIGHT_ARM_FILE_NAME, mode='a', index=False, header = right_arm_csv_header)
         
         if self.torso != None:
             self.torso_pub.publish(self.torso)
@@ -232,9 +226,8 @@ class OcraAngles():
                 data = {'Torso': [self.torso]}
                 df = pd.DataFrame(data) 
                 df.insert(0, "Time", datetime.now())
-                global TORSO_CSV_HEADER
-                df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = TORSO_CSV_HEADER)
-                TORSO_CSV_HEADER = False
+                torso_csv_header = not exists(TORSO_FILE_NAME)
+                df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = torso_csv_header)
 
     def computeTorso(self, tf_torso):
         #Get the vector from hip to neck
