@@ -26,21 +26,6 @@ TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_torso.csv"
 
 DELTA_T_TF = 1 # seconds
 
-# Camera namespace
-CAMERA = "camera2"
-
-# Tf
-NECK_TF_NAME = CAMERA+"/neck"
-HIP_TF_NAME = CAMERA+"/hip"
-LEFT_SHOULDER_TF_NAME = CAMERA+"/left_shoulder"
-RIGHT_SHOULDER_TF_NAME = CAMERA+"/right_shoulder"
-LEFT_ELBOW_TF_NAME = CAMERA+"/left_shoulder_elbow"
-RIGHT_ELBOW_TF_NAME = CAMERA+"/right_shoulder_elbow"
-LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
-RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
-
-#Listen from
-# LIMBS_TOPIC = "/"+CAMERA+"/limb_joint"
 
 #Publish on
 RIGHT_ARM_TOPIC = "ocra/right_arm_angles"
@@ -55,6 +40,10 @@ ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
 
 class OcraAngles():
     def __init__(self):
+        self.right_arm_flag = rospy.get_param('~right_arm', True)
+        self.left_arm_flag = rospy.get_param('~left_arm', True)
+        self.torso_flag = rospy.get_param('~torso_arm', True)
+
         self.right_arm = JointState()
         self.right_arm.name = ARM_JOINTS_NAMES
         self.right_arm.header.stamp = rospy.Time.now()
@@ -71,70 +60,79 @@ class OcraAngles():
 
         self.torso = None
     
-        #rospy.Subscriber(LIMBS_TOPIC, JointState, self.callbackLimb)
-        self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
-        self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
-        self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
+        if(self.right_arm_flag):
+            self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
+        if(self.left_arm_flag):
+            self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
+        if(self.torso_flag):
+            self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
 
     def computeAngles(self):
 
-        try:
-            tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            tf_left_elbow = None
+        if(self.left_arm_flag):
+            try:
+                tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_left_elbow = None
 
-        if tf_left_elbow != None and (rospy.Time().now().secs-tf_left_elbow.header.stamp.secs)>DELTA_T_TF:
+        if not self.left_arm_flag or (tf_left_elbow != None and (rospy.Time().now().secs-tf_left_elbow.header.stamp.secs)>DELTA_T_TF):
             tf_left_elbow = None
         
-        try:
-            tf_right_elbow = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_ELBOW_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        if(self.right_arm_flag):
+            try:
+                tf_right_elbow = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_ELBOW_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_right_elbow = None
+
+        if not self.right_arm_flag or (tf_right_elbow != None and (rospy.Time().now().secs-tf_right_elbow.header.stamp.secs)>DELTA_T_TF):
             tf_right_elbow = None
 
-        if tf_right_elbow != None and (rospy.Time().now().secs-tf_right_elbow.header.stamp.secs)>DELTA_T_TF:
-            tf_right_elbow = None
-
-        try:
-            tf_left_flexion = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            tf_left_flexion = None
+        if(self.left_arm_flag):
+            try:
+                tf_left_flexion = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_left_flexion = None
         
-        if tf_left_flexion != None and (rospy.Time().now().secs-tf_left_flexion.header.stamp.secs)>DELTA_T_TF:
+        if not self.left_arm_flag or (tf_left_flexion != None and (rospy.Time().now().secs-tf_left_flexion.header.stamp.secs)>DELTA_T_TF):
             tf_left_flexion = None
 
-        try:
-            tf_right_flexion = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        if(self.right_arm_flag):
+            try:
+                tf_right_flexion = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_right_flexion = None
+
+        if not self.right_arm_flag or (tf_right_flexion != None and (rospy.Time().now().secs-tf_right_flexion.header.stamp.secs)>DELTA_T_TF):
             tf_right_flexion = None
 
-        if tf_right_flexion != None and (rospy.Time().now().secs-tf_right_flexion.header.stamp.secs)>DELTA_T_TF:
-            tf_right_flexion = None
+        if(self.left_arm_flag):
+            try:
+                tf_left_rotation = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_left_rotation = None
 
-        try:
-            tf_left_rotation = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        if not self.left_arm_flag or (tf_left_rotation != None and (rospy.Time().now().secs-tf_left_rotation.header.stamp.secs)>DELTA_T_TF):
             tf_left_rotation = None
 
-        if tf_left_rotation != None and (rospy.Time().now().secs-tf_left_rotation.header.stamp.secs)>DELTA_T_TF:
-            tf_left_rotation = None
+        if(self.right_arm_flag):
+            try:
+                tf_right_rotation = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_right_rotation = None
 
-        try:
-            tf_right_rotation = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            tf_right_rotation = None
-
-        if tf_right_rotation != None and (rospy.Time().now().secs-tf_right_rotation.header.stamp.secs)>DELTA_T_TF:
+        if not self.right_arm_flag or (tf_right_rotation != None and (rospy.Time().now().secs-tf_right_rotation.header.stamp.secs)>DELTA_T_TF):
             tf_right_rotation = None
         
-        try:
-            tf_hip = self.tfBuffer.lookup_transform('world',HIP_TF_NAME,rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            tf_hip = None
+        if(self.torso_flag):
+            try:
+                tf_hip = self.tfBuffer.lookup_transform('world',HIP_TF_NAME,rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_hip = None
 
-        if tf_hip != None and (rospy.Time().now().secs-tf_hip.header.stamp.secs)>DELTA_T_TF:
+        if not self.torso_flag or (tf_hip != None and (rospy.Time().now().secs-tf_hip.header.stamp.secs)>DELTA_T_TF):
             tf_hip = None
 
         # Compute frame torso_world, with z as tf_torso but y as world
@@ -203,8 +201,8 @@ class OcraAngles():
         if self.left_arm.position != None:
             self.left_arm_pub.publish(self.left_arm)
             if WRITE_TO_CSV:
-                data = {'Left_frontal': [self.left_arm.position[0]], 'Left_lateral': [self.left_arm.position[1]],
-                         'Left_rotation': [self.left_arm.position[2]], 'Left_flexion': [self.left_arm.position[3]]}
+                data = {"Left_"+ARM_JOINTS_NAMES[0]: [self.left_arm.position[0]], "Left_"+ARM_JOINTS_NAMES[1]: [self.left_arm.position[1]],
+                         "Left_"+ARM_JOINTS_NAMES[2]: [self.left_arm.position[2]], "Left_"+ARM_JOINTS_NAMES[3]: [self.left_arm.position[3]]}
                 df = pd.DataFrame(data) 
                 df.insert(0, "Time", datetime.now())
                 left_arm_csv_header = not exists(LEFT_ARM_FILE_NAME)
@@ -213,8 +211,8 @@ class OcraAngles():
         if self.right_arm.position != None:
             self.right_arm_pub.publish(self.right_arm)
             if WRITE_TO_CSV:
-                data = {'Right_frontal': [self.right_arm.position[0]], 'Right_lateral': [self.right_arm.position[1]],
-                         'Right_rotation': [self.right_arm.position[2]], 'Right_flexion': [self.right_arm.position[3]]}
+                data = {"Right_"+ARM_JOINTS_NAMES[0]: [self.right_arm.position[0]], "Right_"+ARM_JOINTS_NAMES[1]: [self.right_arm.position[1]],
+                         "Right_"+ARM_JOINTS_NAMES[2]: [self.right_arm.position[2]], "Right_"+ARM_JOINTS_NAMES[3]: [self.right_arm.position[3]]}
                 df = pd.DataFrame(data) 
                 df.insert(0, "Time", datetime.now())
                 right_arm_csv_header = not exists(RIGHT_ARM_FILE_NAME)
@@ -327,6 +325,31 @@ class OcraAngles():
 
 if __name__ == "__main__":
     rospy.init_node("ocra_angles", anonymous=True)
+
+    #Camera namespace
+    global CAMERA
+    CAMERA = rospy.get_param("~camera_ns", "")
+
+    print("Camera namespace: ", CAMERA)
+
+    #Tf
+    global NECK_TF_NAME
+    global HIP_TF_NAME
+    global LEFT_SHOULDER_TF_NAME
+    global RIGHT_SHOULDER_TF_NAME
+    global LEFT_ELBOW_TF_NAME
+    global RIGHT_ELBOW_TF_NAME
+    global LEFT_WRIST_TF_NAME
+    global RIGHT_WRIST_TF_NAME
+
+    NECK_TF_NAME = CAMERA+"/neck"
+    HIP_TF_NAME = CAMERA+"/hip"
+    LEFT_SHOULDER_TF_NAME = CAMERA+"/left_shoulder"
+    RIGHT_SHOULDER_TF_NAME = CAMERA+"/right_shoulder"
+    LEFT_ELBOW_TF_NAME = CAMERA+"/left_shoulder_elbow"
+    RIGHT_ELBOW_TF_NAME = CAMERA+"/right_shoulder_elbow"
+    LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
+    RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
     
     ocra_angles = OcraAngles()
 

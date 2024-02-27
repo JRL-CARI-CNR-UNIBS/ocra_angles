@@ -1,5 +1,14 @@
+
 <launch>
+  <arg name="camera_ns" default="camera2"/>
+  <arg name="left_arm" default="true"/>
+  <arg name="right_arm" default="true"/>
+  <arg name="torso" default="true"/>
 
-  <node name="ocra_angles" pkg="ocra_angles" type="talker.py"  output="screen" />
-
+  <node name="ocra_angles" pkg="ocra_angles" type="talker.py"  output="screen" >
+    <param name="camera_ns" type="str" value="$(arg camera_ns)" />
+    <param name="left_arm" type="bool" value="$(arg left_arm)" />
+    <param name="right_arm" type="bool" value="$(arg right_arm)" />
+    <param name="torso" type="bool" value="$(arg torso)" />
+  </node>
 </launch>
