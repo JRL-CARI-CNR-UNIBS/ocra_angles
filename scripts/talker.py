@@ -10,6 +10,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion, PoseArray, Transform, Vec
 import pandas as pd
 from datetime import datetime
 
+
 np.float = float    
 np.int = int   #module 'numpy' has no attribute 'int'
 np.object = object    #module 'numpy' has no attribute 'object'
@@ -17,6 +18,12 @@ np.bool = bool    #module 'numpy' has no attribute 'bool'
 
 #USER PARAMETERS
 BACK_INCLINATION_ERROR = 15.6 #degrees
+
+WRITE_TO_CSV = True
+
+LEFT_ARM_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_left_arm.csv"
+RIGHT_ARM_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_right_arm.csv"
+TORSO_FILE_NAME = "~/projects/sharework_ws/src/ocra_angles/data/"+datetime.now().strftime("%m_%d_%Y, %H:%M:%S")+"_ocra_torso.csv"
 
 # Camera namespace
 CAMERA = "camera2"
@@ -43,6 +50,12 @@ RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
 #Angles names
 ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
+
+LEFT_ARM_CSV_HEADER = True
+RIGHT_ARM_CSV_HEADER = True
+TORSO_CSV_HEADER = True
+
+DELTA_T_TF = 1
 
 class OcraAngles():
     def __init__(self):
@@ -71,39 +84,61 @@ class OcraAngles():
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
 
     def computeAngles(self):
+
         try:
-            tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time(0))
+            tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             tf_left_elbow = None
 
+        if tf_left_elbow != None and (rospy.Time().now().secs-tf_left_elbow.header.stamp.secs)>DELTA_T_TF:
+            tf_left_elbow = None
+        
         try:
-            tf_right_elbow = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_ELBOW_TF_NAME,rospy.Time(0))
+            tf_right_elbow = self.tfBuffer.lookup_transform(RIGHT_SHOULDER_TF_NAME,RIGHT_ELBOW_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             tf_right_elbow = None
 
+        if tf_right_elbow != None and (rospy.Time().now().secs-tf_right_elbow.header.stamp.secs)>DELTA_T_TF:
+            tf_right_elbow = None
+
         try:
-            tf_left_flexion = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time(0))
+            tf_left_flexion = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_left_flexion = None
+        
+        if tf_left_flexion != None and (rospy.Time().now().secs-tf_left_flexion.header.stamp.secs)>DELTA_T_TF:
             tf_left_flexion = None
 
         try:
-            tf_right_flexion = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time(0))
+            tf_right_flexion = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             tf_right_flexion = None
 
+        if tf_right_flexion != None and (rospy.Time().now().secs-tf_right_flexion.header.stamp.secs)>DELTA_T_TF:
+            tf_right_flexion = None
+
         try:
-            tf_left_rotation = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time(0))
+            tf_left_rotation = self.tfBuffer.lookup_transform(LEFT_ELBOW_TF_NAME,LEFT_WRIST_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             tf_left_rotation = None
 
+        if tf_left_rotation != None and (rospy.Time().now().secs-tf_left_rotation.header.stamp.secs)>DELTA_T_TF:
+            tf_left_rotation = None
+
         try:
-            tf_right_rotation = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time(0))
+            tf_right_rotation = self.tfBuffer.lookup_transform(RIGHT_ELBOW_TF_NAME,RIGHT_WRIST_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_right_rotation = None
+
+        if tf_right_rotation != None and (rospy.Time().now().secs-tf_right_rotation.header.stamp.secs)>DELTA_T_TF:
             tf_right_rotation = None
         
         try:
-            tf_hip = self.tfBuffer.lookup_transform('world',HIP_TF_NAME,rospy.Time(0))
+            tf_hip = self.tfBuffer.lookup_transform('world',HIP_TF_NAME,rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            tf_hip = None
+
+        if tf_hip != None and (rospy.Time().now().secs-tf_hip.header.stamp.secs)>DELTA_T_TF:
             tf_hip = None
 
         # Compute frame torso_world, with z as tf_torso but y as world
@@ -141,50 +176,65 @@ class OcraAngles():
             tf_neck_to_hip_as_world = None
 
         # Left arm
-        if tf_left_elbow != None and tf_left_flexion != None and tf_left_rotation != None and tf_left_flexion != None:
+        if tf_left_elbow != None and tf_left_flexion != None and tf_left_rotation != None:
             left_frontal = self.computeFrontal(tf_left_elbow) + BACK_INCLINATION_ERROR
             left_lateral = self.computeLateral(tf_left_elbow)
-            left_rotation = self.computeRotation(tf_left_rotation)
+            left_rotation = np.abs(self.computeRotation(tf_left_rotation)-180)
             left_flexion = self.computeFlexion(tf_left_flexion)
             left_arm = [left_frontal,left_lateral,left_rotation,left_flexion]
             self.left_arm.position = left_arm
-
-            df = pd.DataFrame(left_arm, columns=['Left_frontal', 'Left_lateral', 'Left_rotation', 'Left_flexion']) 
-            df.insert(0, "Time", datetime.now())
-            df.to_excel("ocra_left_arm.xlsx", index=False)
         else:
             self.left_arm.position = None
 
         # Right arm
-        # if tf_right_elbow != None and tf_right_flexion != None and tf_right_rotation != None and tf_right_flexion != None:
-        #     right_frontal = -self.computeFrontal(tf_right_elbow)
-        #     right_lateral = self.computeLateral(tf_right_elbow)
-        #     right_rotation = self.computeRotation(tf_right_rotation)
-        #     right_flexion = self.computeFlexion(tf_right_flexion)
-        #     right_arm = [right_frontal,right_lateral,right_rotation,right_flexion]
-        #     self.right_arm.position = right_arm
-        # else:
-        #     self.right_arm.position = None
+        if tf_right_elbow != None and tf_right_flexion != None and tf_right_rotation != None:
+            right_frontal = -(self.computeFrontal(tf_right_elbow) - BACK_INCLINATION_ERROR)
+            right_lateral = self.computeLateral(tf_right_elbow)
+            right_rotation = np.abs(self.computeRotation(tf_right_rotation))
+            right_flexion = self.computeFlexion(tf_right_flexion)
+            right_arm = [right_frontal,right_lateral,right_rotation,right_flexion]
+            self.right_arm.position = right_arm
+        else:
+            self.right_arm.position = None
         
         # Torso
         if tf_neck_to_hip_as_world != None:
             self.torso = self.computeTorso(tf_neck_to_hip_as_world) + BACK_INCLINATION_ERROR
-            data = [self.torso]
-            df = pd.DataFrame(data, columns=['Torso']) 
-            df.insert(0, "Time", datetime.now())
-            df.to_excel("ocra_torso.xlsx", index=False)
         else:
             self.torso = None
 
         # Publish
         if self.left_arm.position != None:
             self.left_arm_pub.publish(self.left_arm)
+            if WRITE_TO_CSV:
+                data = {'Left_frontal': [self.left_arm.position[0]], 'Left_lateral': [self.left_arm.position[1]],
+                         'Left_rotation': [self.left_arm.position[2]], 'Left_flexion': [self.left_arm.position[3]]}
+                df = pd.DataFrame(data) 
+                df.insert(0, "Time", datetime.now())
+                global LEFT_ARM_CSV_HEADER
+                df.to_csv(LEFT_ARM_FILE_NAME, mode='a', index=False, header = LEFT_ARM_CSV_HEADER)
+                LEFT_ARM_CSV_HEADER = False
 
-        # if self.right_arm.position != None:
-        #     self.right_arm_pub.publish(self.right_arm)
+        if self.right_arm.position != None:
+            self.right_arm_pub.publish(self.right_arm)
+            if WRITE_TO_CSV:
+                data = {'Right_frontal': [self.right_arm.position[0]], 'Right_lateral': [self.right_arm.position[1]],
+                         'Right_rotation': [self.right_arm.position[2]], 'Right_flexion': [self.right_arm.position[3]]}
+                df = pd.DataFrame(data) 
+                df.insert(0, "Time", datetime.now())
+                global RIGHT_ARM_CSV_HEADER
+                df.to_csv(RIGHT_ARM_FILE_NAME, mode='a', index=False, header = RIGHT_ARM_CSV_HEADER)
+                RIGHT_ARM_CSV_HEADER = False
         
         if self.torso != None:
             self.torso_pub.publish(self.torso)
+            if WRITE_TO_CSV:
+                data = {'Torso': [self.torso]}
+                df = pd.DataFrame(data) 
+                df.insert(0, "Time", datetime.now())
+                global TORSO_CSV_HEADER
+                df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = TORSO_CSV_HEADER)
+                TORSO_CSV_HEADER = False
 
     def computeTorso(self, tf_torso):
         #Get the vector from hip to neck
@@ -264,7 +314,7 @@ class OcraAngles():
         z = np.array([0,0,1])
         angle = self.angle_between_vectors(v,z)*180/np.pi
 
-        return np.abs(angle-180)
+        return angle
     
     def unit_vector(self,v):
         return (v / np.linalg.norm(v))
@@ -284,6 +334,7 @@ class OcraAngles():
 
 if __name__ == "__main__":
     rospy.init_node("ocra_angles", anonymous=True)
+    
     ocra_angles = OcraAngles()
 
     rate = rospy.Rate(60)
