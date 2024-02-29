@@ -21,6 +21,7 @@ DELTA_T_TF = 1 # seconds
 RIGHT_HAND_ID = 20 #from mediapipe
 LEFT_HAND_ID = 19 #from mediapipe
 ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
+HAND_JOINTS_NAMES = ["Up/Down", "Left/Right"]
 LEFT_ARM_JOINT_PREFIX = "left_arm"
 RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
@@ -29,6 +30,8 @@ class OcraAngles():
         self.right_arm_flag = rospy.get_param('~right_arm', True)
         self.left_arm_flag = rospy.get_param('~left_arm', True)
         self.torso_flag = rospy.get_param('~torso_arm', True)
+        self.right_hand_flag = rospy.get_param('~right_hand', True)
+        self.left_hand_flag = rospy.get_param('~left_hand', True)
 
         self.right_arm = JointState()
         self.right_arm.name = ARM_JOINTS_NAMES
@@ -50,8 +53,20 @@ class OcraAngles():
         self.left_hand_pose = None
         self.right_hand_available = False
         self.left_hand_available = False
-        self.right_hand = None #[up/down,left/right]
-        self.left_hand = None  #[up/down,left/right]
+
+        self.right_hand = JointState()
+        self.right_hand.name = HAND_JOINTS_NAMES
+        self.right_hand.header.stamp = rospy.Time.now()
+        self.right_hand.position = None
+        self.right_hand.velocity = [0.0,0.0] #does not matter
+        self.right_hand.effort   = [0.0,0.0] #does not matter
+
+        self.left_hand = JointState()
+        self.left_hand.name = HAND_JOINTS_NAMES
+        self.left_hand.header.stamp = rospy.Time.now()
+        self.left_hand.position = None
+        self.left_hand.velocity = [0.0,0.0] #does not matter
+        self.left_hand.effort   = [0.0,0.0] #does not matter
 
         if(self.right_arm_flag):
             self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
@@ -59,7 +74,11 @@ class OcraAngles():
             self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
         if(self.torso_flag):
             self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
-        if(self.right_arm_flag or self.left_arm_flag):
+        if(self.left_hand_flag):
+            self.left_hand_pub = rospy.Publisher(LEFT_HAND_TOPIC, JointState, queue_size=10)
+        if(self.right_hand_flag):
+            self.right_hand_pub = rospy.Publisher(RIGHT_HAND_TOPIC, JointState, queue_size=10)
+        if(self.right_hand_flag or self.left_hand_flag):
             self.keypoints_listener = rospy.Subscriber("/skeleton_marker", MarkerArray, self.callback_listener)
 
         self.tfBuffer = tf2_ros.Buffer()
@@ -76,7 +95,7 @@ class OcraAngles():
                 self.left_hand_available = True
         
     def computeAngles(self):
-        self.right_hand_available = False
+        self.right_hand_available = False 
         self.left_hand_available = False
 
         if(self.left_arm_flag):
@@ -176,7 +195,7 @@ class OcraAngles():
         else:
             tf_neck_to_hip_as_world = None
 
-        if(self.left_hand_available and tf_left_flexion != None):
+        if(self.left_hand_available):
             t1     = Transform()
             t1TS   = TransformStamped()
 
@@ -199,7 +218,7 @@ class OcraAngles():
         else:
             tf_left_hand = None
 
-        if(self.right_hand_available and tf_right_flexion != None):
+        if(self.right_hand_available):
             t2     = Transform()
             t2TS   = TransformStamped()
 
@@ -235,7 +254,10 @@ class OcraAngles():
         
         # Left Hand
             if tf_left_hand != None:
-                self.left_hand = self.computeLeftHand(tf_left_hand)
+                left_hand = self.computeLeftHand(tf_left_hand)
+                self.left_hand.position = left_hand
+            else:
+                self.left_hand.position = None
         
         # Right arm
         if tf_right_elbow != None and tf_right_flexion != None and tf_right_rotation != None:
@@ -250,7 +272,10 @@ class OcraAngles():
         
         # Right hand
             if tf_right_hand != None:
-                self.right_hand = self.computeRightHand(tf_right_hand)
+                right_hand = self.computeRightHand(tf_right_hand)
+                self.right_hand.position = right_hand
+            else:
+                self.right_hand.position = None
         
         # Torso
         if tf_neck_to_hip_as_world != None:
@@ -278,6 +303,24 @@ class OcraAngles():
                 df.insert(0, "Time", datetime.now())
                 right_arm_csv_header = not exists(RIGHT_ARM_FILE_NAME)
                 df.to_csv(RIGHT_ARM_FILE_NAME, mode='a', index=False, header = right_arm_csv_header)
+
+        if self.right_hand.position != None:
+            self.right_hand_pub.publish(self.right_hand)
+            if WRITE_TO_CSV:
+                data = {"Right_"+HAND_JOINTS_NAMES[0]: [self.right_hand.position[0]], "Right_"+HAND_JOINTS_NAMES[1]: [self.right_hand.position[1]]}
+                df = pd.DataFrame(data) 
+                df.insert(0, "Time", datetime.now())
+                right_hand_csv_header = not exists(RIGHT_HAND_FILE_NAME)
+                df.to_csv(RIGHT_HAND_FILE_NAME, mode='a', index=False, header = right_hand_csv_header)
+
+        if self.left_hand.position != None:
+            self.left_hand_pub.publish(self.left_hand)
+            if WRITE_TO_CSV:
+                data = {"Left_"+HAND_JOINTS_NAMES[0]: [self.left_hand.position[0]], "Left_"+HAND_JOINTS_NAMES[1]: [self.left_hand.position[1]]}
+                df = pd.DataFrame(data) 
+                df.insert(0, "Time", datetime.now())
+                left_hand_csv_header = not exists(LEFT_HAND_FILE_NAME)
+                df.to_csv(LEFT_HAND_FILE_NAME, mode='a', index=False, header = left_hand_csv_header)
         
         if self.torso != None:
             self.torso_pub.publish(self.torso)
@@ -289,7 +332,7 @@ class OcraAngles():
                 df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = torso_csv_header)
 
     def computeLeftHand(self, hand_pose):
-        return np.array([0.0,0.0]) # FIX
+        return np.array([0.0,0.0]) #FIX
 
     def computeRightHand(self, hand_pose):
         return np.array([0.0,0.0]) #FIX
@@ -401,16 +444,20 @@ if __name__ == "__main__":
 
     DATE_STR = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
     
-    global LEFT_ARM_FILE_NAME, RIGHT_ARM_FILE_NAME, TORSO_FILE_NAME
+    global LEFT_ARM_FILE_NAME, RIGHT_ARM_FILE_NAME, TORSO_FILE_NAME, LEFT_HND_FILE_NAME, RIGHT_HAND_FILE_NAME
     PATH_TO_FILE = "/home/galois/projects/sharework_ws/src/ocra_angles/data/"
     LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_arm.csv"
     RIGHT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_right_arm.csv"
     TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_torso.csv"
+    LEFT_HAND_FILE_NAME = LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_hand.csv"
+    RIGHT_HAND_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_right_hand.csv"
 
     #Publish on
-    global RIGHT_ARM_TOPIC, LEFT_ARM_TOPIC, TORSO_TOPIC
+    global RIGHT_ARM_TOPIC, LEFT_ARM_TOPIC, TORSO_TOPIC, LEFT_HAND_TOPIC, RIGHT_HAND_TOPIC
     RIGHT_ARM_TOPIC = "ocra/"+CAMERA+"/right_arm_angles"
     LEFT_ARM_TOPIC = "ocra/"+CAMERA+"/left_arm_angles"
+    RIGHT_HAND_TOPIC = "ocra/"+CAMERA+"/right_hand_angles"
+    LEFT_HAND_TOPIC = "ocra/"+CAMERA+"/left_hand_angles"
     TORSO_TOPIC = "ocra/"+CAMERA+"/torso"
 
     #Tf
@@ -423,7 +470,7 @@ if __name__ == "__main__":
     RIGHT_ELBOW_TF_NAME = CAMERA+"/right_shoulder_elbow"
     LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
     RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
-    CAMERA_TF_NAME = CAMERA+"/" #FIX
+    CAMERA_TF_NAME = CAMERA+"_color_optical_frame"
     
     ocra_angles = OcraAngles()
 
