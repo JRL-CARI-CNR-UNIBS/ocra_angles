@@ -51,8 +51,8 @@ class OcraAngles():
 
         self.right_hand_pose = None
         self.left_hand_pose = None
-        self.right_hand_available = False
-        self.left_hand_available = False
+        self.right_hand_time = 0
+        self.left_hand_time = 0
 
         self.right_hand = JointState()
         self.right_hand.name = HAND_JOINTS_NAMES
@@ -79,25 +79,23 @@ class OcraAngles():
         if(self.right_hand_flag):
             self.right_hand_pub = rospy.Publisher(RIGHT_HAND_TOPIC, JointState, queue_size=10)
         if(self.right_hand_flag or self.left_hand_flag):
-            self.keypoints_listener = rospy.Subscriber("/skeleton_marker", MarkerArray, self.callback_listener)
+            self.keypoints_listener = rospy.Subscriber(CAMERA+"/skeleton_marker", MarkerArray, self.callback_listener)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster()
 
     def callback_listener(self,data):
         markers = data.markers
         for marker in markers:
             if(marker.id == RIGHT_HAND_ID):
                 self.right_hand_pose = marker.pose
-                self.right_hand_available = True
+                self.right_hand_time = rospy.Time.now().secs
             elif(marker.id == LEFT_HAND_ID):
                 self.left_hand_pose = marker.pose
-                self.left_hand_available = True
+                self.left_hand_time = rospy.Time.now().secs
         
     def computeAngles(self):
-        self.right_hand_available = False 
-        self.left_hand_available = False
-
         if(self.left_arm_flag):
             try:
                 tf_left_elbow = self.tfBuffer.lookup_transform(LEFT_SHOULDER_TF_NAME,LEFT_ELBOW_TF_NAME,rospy.Time())
@@ -185,8 +183,7 @@ class OcraAngles():
             t0TS.header.stamp= rospy.Time.now()
             t0TS.child_frame_id = CAMERA+"/hip_as_world"
             t0TS.transform=t0
-            br = tf2_ros.TransformBroadcaster()
-            br.sendTransform(t0TS)
+            self.tf_broadcaster.sendTransform(t0TS)
 
             try:
                 tf_neck_to_hip_as_world = self.tfBuffer.lookup_transform(t0TS.child_frame_id,NECK_TF_NAME,rospy.Time(0))
@@ -194,22 +191,21 @@ class OcraAngles():
                 tf_neck_to_hip_as_world = None
         else:
             tf_neck_to_hip_as_world = None
-
-        if(self.left_hand_available):
+        
+        if(rospy.Time().now().secs-self.left_hand_time<=DELTA_T_TF):
             t1     = Transform()
             t1TS   = TransformStamped()
 
             quat1   = self.left_hand_pose.orientation
             tran1   = self.left_hand_pose.position
 
-            t1.rotation=Quaternion(quat1[0],quat1[1],quat1[2],quat1[3])
-            t1.translation=Vector3(tran1[0],tran1[1],tran1[2])
+            t1.rotation=quat1
+            t1.translation=tran1
             t1TS.header.frame_id = CAMERA_TF_NAME
             t1TS.header.stamp= rospy.Time.now()
             t1TS.child_frame_id = CAMERA+"/left_hand"
             t1TS.transform=t1
-            br = tf2_ros.TransformBroadcaster()
-            br.sendTransform(t1TS)
+            self.tf_broadcaster.sendTransform(t1TS)
             
             try:
                 tf_left_hand = self.tfBuffer.lookup_transform(t1TS.child_frame_id,LEFT_WRIST_TF_NAME,rospy.Time(0))
@@ -218,21 +214,20 @@ class OcraAngles():
         else:
             tf_left_hand = None
 
-        if(self.right_hand_available):
+        if(rospy.Time().now().secs-self.right_hand_time<=DELTA_T_TF):
             t2     = Transform()
             t2TS   = TransformStamped()
 
             quat2   = self.right_hand_pose.orientation
             tran2   = self.right_hand_pose.position
 
-            t2.rotation=Quaternion(quat2[0],quat2[1],quat2[2],quat2[3])
-            t2.translation=Vector3(tran2[0],tran2[1],tran2[2])
+            t2.rotation=quat2
+            t2.translation=tran2
             t2TS.header.frame_id = CAMERA_TF_NAME
             t2TS.header.stamp= rospy.Time.now()
             t2TS.child_frame_id = CAMERA+"/right_hand"
             t2TS.transform=t2
-            br = tf2_ros.TransformBroadcaster()
-            br.sendTransform(t2TS)
+            self.tf_broadcaster.sendTransform(t2TS)
             
             try:
                 tf_right_hand = self.tfBuffer.lookup_transform(t2TS.child_frame_id,RIGHT_WRIST_TF_NAME,rospy.Time(0))
@@ -253,11 +248,11 @@ class OcraAngles():
             self.left_arm.position = None
         
         # Left Hand
-            if tf_left_hand != None:
-                left_hand = self.computeLeftHand(tf_left_hand)
-                self.left_hand.position = left_hand
-            else:
-                self.left_hand.position = None
+        if tf_left_hand != None:
+            self.left_hand.position = self.computeHand(tf_left_hand)
+            
+        else:
+            self.left_hand.position = None
         
         # Right arm
         if tf_right_elbow != None and tf_right_flexion != None and tf_right_rotation != None:
@@ -271,11 +266,10 @@ class OcraAngles():
             self.right_arm.position = None
         
         # Right hand
-            if tf_right_hand != None:
-                right_hand = self.computeRightHand(tf_right_hand)
-                self.right_hand.position = right_hand
-            else:
-                self.right_hand.position = None
+        if tf_right_hand != None:
+            self.right_hand.position = self.computeHand(tf_right_hand)
+        else:
+            self.right_hand.position = None
         
         # Torso
         if tf_neck_to_hip_as_world != None:
@@ -331,11 +325,31 @@ class OcraAngles():
                 torso_csv_header = not exists(TORSO_FILE_NAME)
                 df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = torso_csv_header)
 
-    def computeLeftHand(self, hand_pose):
-        return np.array([0.0,0.0]) #FIX
+        # self.left_hand_available = False
+        # self.right_hand_available = False
 
-    def computeRightHand(self, hand_pose):
-        return np.array([0.0,0.0]) #FIX
+    def computeHand(self, tf_hand):
+        #Get the vector from wrist to hand
+        v = np.array([tf_hand.transform.translation.x,
+                      tf_hand.transform.translation.y,
+                      tf_hand.transform.translation.z])
+
+        #Project the vector on the y-z plane
+        x = np.array([1,0,0])
+        v_prj = self.project_onto_plane(v,x)
+
+        #Get the angle between the vector projected and the y axis
+        y = -np.array([0,1,0])  #towards the floor
+
+        angle_up_down = np.abs(self.angle_between_vectors(v_prj,y) *180/np.pi)
+
+        #Project the vector on the y-x plane
+        z = np.array([0,0,1])
+        v_prj2 = self.project_onto_plane(v,z)
+
+        angle_left_right = np.abs(self.angle_between_vectors(v_prj2,y) *180/np.pi)
+
+        return [angle_up_down,angle_left_right]
 
     def computeTorso(self, tf_torso):
         #Get the vector from hip to neck
