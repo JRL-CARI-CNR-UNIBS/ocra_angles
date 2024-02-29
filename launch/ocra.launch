@@ -12,11 +12,11 @@
     <param name="torso" type="bool" value="true" />
   </node>
 
-  <!-- <node name="ocra_angles2" pkg="ocra_angles" type="talker.py"  output="screen" >
+  <node name="ocra_angles2" pkg="ocra_angles" type="talker.py"  output="screen" >
     <param name="camera_ns" type="str" value="camera2" />
     <param name="left_arm" type="bool" value="true" />
     <param name="right_arm" type="bool" value="true" />
     <param name="torso" type="bool" value="true" />
-  </node> -->
+  </node>
 
 </launch>
