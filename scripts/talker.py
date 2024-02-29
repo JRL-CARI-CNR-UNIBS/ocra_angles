@@ -10,7 +10,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion, PoseArray, Transform, Vec
 import pandas as pd
 from datetime import datetime
 from os.path import exists, abspath
-
+from visualization_msgs.msg import Marker, MarkerArray
 
 #USER PARAMETERS
 BACK_INCLINATION_ERROR = 15.6 #degrees
@@ -18,6 +18,8 @@ WRITE_TO_CSV = True
 DELTA_T_TF = 1 # seconds
 
 #Angles names
+RIGHT_HAND_ID = 20 #from mediapipe
+LEFT_HAND_ID = 19 #from mediapipe
 ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
 LEFT_ARM_JOINT_PREFIX = "left_arm"
 RIGHT_ARM_JOINT_PREFIX = "right_arm"
@@ -43,18 +45,39 @@ class OcraAngles():
         self.left_arm.effort   = [0.0,0.0,0.0,0.0] #does not matter
 
         self.torso = None
-    
+
+        self.right_hand_pose = None
+        self.left_hand_pose = None
+        self.right_hand_available = False
+        self.left_hand_available = False
+        self.right_hand = None #[up/down,left/right]
+        self.left_hand = None  #[up/down,left/right]
+
         if(self.right_arm_flag):
             self.right_arm_pub = rospy.Publisher(RIGHT_ARM_TOPIC, JointState, queue_size=10)
         if(self.left_arm_flag):
             self.left_arm_pub = rospy.Publisher(LEFT_ARM_TOPIC, JointState, queue_size=10)
         if(self.torso_flag):
             self.torso_pub = rospy.Publisher(TORSO_TOPIC, Float64, queue_size=10)
+        if(self.right_arm_flag or self.left_arm_flag):
+            self.keypoints_listener = rospy.Subscriber("/skeleton_marker", MarkerArray, self.callback_listener)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tfBuffer)
 
+    def callback_listener(self,data):
+        markers = data.markers
+        for marker in markers:
+            if(marker.id == RIGHT_HAND_ID):
+                self.right_hand_pose = marker.pose
+                self.right_hand_available = True
+            elif(marker.id == LEFT_HAND_ID):
+                self.left_hand_pose = marker.pose
+                self.left_hand_available = True
+        
     def computeAngles(self):
+        self.right_hand_available = False
+        self.left_hand_available = False
 
         if(self.left_arm_flag):
             try:
@@ -153,6 +176,52 @@ class OcraAngles():
         else:
             tf_neck_to_hip_as_world = None
 
+        if(self.left_hand_available and tf_left_flexion != None):
+            t1     = Transform()
+            t1TS   = TransformStamped()
+
+            quat1   = self.left_hand_pose.orientation
+            tran1   = self.left_hand_pose.position
+
+            t1.rotation=Quaternion(quat1[0],quat1[1],quat1[2],quat1[3])
+            t1.translation=Vector3(tran1[0],tran1[1],tran1[2])
+            t1TS.header.frame_id = CAMERA_TF_NAME
+            t1TS.header.stamp= rospy.Time.now()
+            t1TS.child_frame_id = CAMERA+"/left_hand"
+            t1TS.transform=t1
+            br = tf2_ros.TransformBroadcaster()
+            br.sendTransform(t1TS)
+            
+            try:
+                tf_left_hand = self.tfBuffer.lookup_transform(t1TS.child_frame_id,LEFT_WRIST_TF_NAME,rospy.Time(0))
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_left_hand = None
+        else:
+            tf_left_hand = None
+
+        if(self.right_hand_available and tf_right_flexion != None):
+            t2     = Transform()
+            t2TS   = TransformStamped()
+
+            quat2   = self.right_hand_pose.orientation
+            tran2   = self.right_hand_pose.position
+
+            t2.rotation=Quaternion(quat2[0],quat2[1],quat2[2],quat2[3])
+            t2.translation=Vector3(tran2[0],tran2[1],tran2[2])
+            t2TS.header.frame_id = CAMERA_TF_NAME
+            t2TS.header.stamp= rospy.Time.now()
+            t2TS.child_frame_id = CAMERA+"/right_hand"
+            t2TS.transform=t2
+            br = tf2_ros.TransformBroadcaster()
+            br.sendTransform(t2TS)
+            
+            try:
+                tf_right_hand = self.tfBuffer.lookup_transform(t2TS.child_frame_id,RIGHT_WRIST_TF_NAME,rospy.Time(0))
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                tf_right_hand = None
+        else:
+            tf_right_hand = None
+
         # Left arm
         if tf_left_elbow != None and tf_left_flexion != None and tf_left_rotation != None:
             left_frontal = self.computeFrontal(tf_left_elbow) + BACK_INCLINATION_ERROR
@@ -163,7 +232,11 @@ class OcraAngles():
             self.left_arm.position = left_arm
         else:
             self.left_arm.position = None
-
+        
+        # Left Hand
+            if tf_left_hand != None:
+                self.left_hand = self.computeLeftHand(tf_left_hand)
+        
         # Right arm
         if tf_right_elbow != None and tf_right_flexion != None and tf_right_rotation != None:
             right_frontal = -(self.computeFrontal(tf_right_elbow) - BACK_INCLINATION_ERROR)
@@ -174,6 +247,10 @@ class OcraAngles():
             self.right_arm.position = right_arm
         else:
             self.right_arm.position = None
+        
+        # Right hand
+            if tf_right_hand != None:
+                self.right_hand = self.computeRightHand(tf_right_hand)
         
         # Torso
         if tf_neck_to_hip_as_world != None:
@@ -210,6 +287,12 @@ class OcraAngles():
                 df.insert(0, "Time", datetime.now())
                 torso_csv_header = not exists(TORSO_FILE_NAME)
                 df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = torso_csv_header)
+
+    def computeLeftHand(self, hand_pose):
+        return np.array([0.0,0.0]) # FIX
+
+    def computeRightHand(self, hand_pose):
+        return np.array([0.0,0.0]) #FIX
 
     def computeTorso(self, tf_torso):
         #Get the vector from hip to neck
@@ -306,7 +389,7 @@ class OcraAngles():
         v1_u = self.unit_vector(v1)
         v2_u = self.unit_vector(v2)
         return np.arccos(np.clip(np.dot(v1_u, v2_u),-1.0, 1.0))
-
+    
 if __name__ == "__main__":
     rospy.init_node("ocra_angles", anonymous=True)
 
@@ -331,7 +414,7 @@ if __name__ == "__main__":
     TORSO_TOPIC = "ocra/"+CAMERA+"/torso"
 
     #Tf
-    global NECK_TF_NAME, HIP_TF_NAME, LEFT_SHOULDER_TF_NAME, RIGHT_SHOULDER_TF_NAME, LEFT_ELBOW_TF_NAME, RIGHT_ELBOW_TF_NAME, LEFT_WRIST_TF_NAME, RIGHT_WRIST_TF_NAME
+    global CAMERA_TF_NAME, NECK_TF_NAME, HIP_TF_NAME, LEFT_SHOULDER_TF_NAME, RIGHT_SHOULDER_TF_NAME, LEFT_ELBOW_TF_NAME, RIGHT_ELBOW_TF_NAME, LEFT_WRIST_TF_NAME, RIGHT_WRIST_TF_NAME
     NECK_TF_NAME = CAMERA+"/neck"
     HIP_TF_NAME = CAMERA+"/hip"
     LEFT_SHOULDER_TF_NAME = CAMERA+"/left_shoulder"
@@ -340,6 +423,7 @@ if __name__ == "__main__":
     RIGHT_ELBOW_TF_NAME = CAMERA+"/right_shoulder_elbow"
     LEFT_WRIST_TF_NAME = CAMERA+"/left_shoulder_wrist"
     RIGHT_WRIST_TF_NAME = CAMERA+"/right_shoulder_wrist"
+    CAMERA_TF_NAME = CAMERA+"/" #FIX
     
     ocra_angles = OcraAngles()
 
