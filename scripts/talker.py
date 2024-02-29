@@ -12,31 +12,15 @@ from datetime import datetime
 from os.path import exists, abspath
 
 
-
 #USER PARAMETERS
 BACK_INCLINATION_ERROR = 15.6 #degrees
-
 WRITE_TO_CSV = True
-
-DATE_STR = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-PATH_TO_FILE = "/home/galois/projects/sharework_ws/src/ocra_angles/data/"
-LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_left_arm.csv"
-RIGHT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_right_arm.csv"
-TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+"_ocra_torso.csv"
-
 DELTA_T_TF = 1 # seconds
-
-
-#Publish on
-RIGHT_ARM_TOPIC = "ocra/right_arm_angles"
-LEFT_ARM_TOPIC = "ocra/left_arm_angles"
-TORSO_TOPIC = "ocra/torso"
-LEFT_ARM_JOINT_PREFIX = "left_arm"
-RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
 #Angles names
 ARM_JOINTS_NAMES = ["Frontal", "Lateral","Rotation","Flexion"]
-
+LEFT_ARM_JOINT_PREFIX = "left_arm"
+RIGHT_ARM_JOINT_PREFIX = "right_arm"
 
 class OcraAngles():
     def __init__(self):
@@ -332,16 +316,22 @@ if __name__ == "__main__":
 
     print("Camera namespace: ", CAMERA)
 
-    #Tf
-    global NECK_TF_NAME
-    global HIP_TF_NAME
-    global LEFT_SHOULDER_TF_NAME
-    global RIGHT_SHOULDER_TF_NAME
-    global LEFT_ELBOW_TF_NAME
-    global RIGHT_ELBOW_TF_NAME
-    global LEFT_WRIST_TF_NAME
-    global RIGHT_WRIST_TF_NAME
+    DATE_STR = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
+    
+    global LEFT_ARM_FILE_NAME, RIGHT_ARM_FILE_NAME, TORSO_FILE_NAME
+    PATH_TO_FILE = "/home/galois/projects/sharework_ws/src/ocra_angles/data/"
+    LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_arm.csv"
+    RIGHT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_right_arm.csv"
+    TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_torso.csv"
 
+    #Publish on
+    global RIGHT_ARM_TOPIC, LEFT_ARM_TOPIC, TORSO_TOPIC
+    RIGHT_ARM_TOPIC = "ocra/"+CAMERA+"/right_arm_angles"
+    LEFT_ARM_TOPIC = "ocra/"+CAMERA+"/left_arm_angles"
+    TORSO_TOPIC = "ocra/"+CAMERA+"/torso"
+
+    #Tf
+    global NECK_TF_NAME, HIP_TF_NAME, LEFT_SHOULDER_TF_NAME, RIGHT_SHOULDER_TF_NAME, LEFT_ELBOW_TF_NAME, RIGHT_ELBOW_TF_NAME, LEFT_WRIST_TF_NAME, RIGHT_WRIST_TF_NAME
     NECK_TF_NAME = CAMERA+"/neck"
     HIP_TF_NAME = CAMERA+"/hip"
     LEFT_SHOULDER_TF_NAME = CAMERA+"/left_shoulder"
