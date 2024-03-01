@@ -284,9 +284,20 @@ class OcraAngles():
                 data = {"Left_"+ARM_JOINTS_NAMES[0]: [self.left_arm.position[0]], "Left_"+ARM_JOINTS_NAMES[1]: [self.left_arm.position[1]],
                          "Left_"+ARM_JOINTS_NAMES[2]: [self.left_arm.position[2]], "Left_"+ARM_JOINTS_NAMES[3]: [self.left_arm.position[3]]}
                 df = pd.DataFrame(data) 
-                df.insert(0, "Time", datetime.now())
+                secs = (datetime.now()-datetime(1970,1,1)).total_seconds()
+                df.insert(0, "Time", secs)
                 left_arm_csv_header = not exists(LEFT_ARM_FILE_NAME)
                 df.to_csv(LEFT_ARM_FILE_NAME, mode='a', index=False, header = left_arm_csv_header)
+
+        if self.left_hand.position != None:
+            self.left_hand_pub.publish(self.left_hand)
+            if WRITE_TO_CSV:
+                data = {"Left_"+HAND_JOINTS_NAMES[0]: [self.left_hand.position[0]], "Left_"+HAND_JOINTS_NAMES[1]: [self.left_hand.position[1]]}
+                df = pd.DataFrame(data) 
+                secs = (datetime.now()-datetime(1970,1,1)).total_seconds()
+                df.insert(0, "Time", secs)
+                left_hand_csv_header = not exists(LEFT_HAND_FILE_NAME)
+                df.to_csv(LEFT_HAND_FILE_NAME, mode='a', index=False, header = left_hand_csv_header)
 
         if self.right_arm.position != None:
             self.right_arm_pub.publish(self.right_arm)
@@ -294,7 +305,8 @@ class OcraAngles():
                 data = {"Right_"+ARM_JOINTS_NAMES[0]: [self.right_arm.position[0]], "Right_"+ARM_JOINTS_NAMES[1]: [self.right_arm.position[1]],
                          "Right_"+ARM_JOINTS_NAMES[2]: [self.right_arm.position[2]], "Right_"+ARM_JOINTS_NAMES[3]: [self.right_arm.position[3]]}
                 df = pd.DataFrame(data) 
-                df.insert(0, "Time", datetime.now())
+                secs = (datetime.now()-datetime(1970,1,1)).total_seconds()
+                df.insert(0, "Time", secs)
                 right_arm_csv_header = not exists(RIGHT_ARM_FILE_NAME)
                 df.to_csv(RIGHT_ARM_FILE_NAME, mode='a', index=False, header = right_arm_csv_header)
 
@@ -303,25 +315,18 @@ class OcraAngles():
             if WRITE_TO_CSV:
                 data = {"Right_"+HAND_JOINTS_NAMES[0]: [self.right_hand.position[0]], "Right_"+HAND_JOINTS_NAMES[1]: [self.right_hand.position[1]]}
                 df = pd.DataFrame(data) 
-                df.insert(0, "Time", datetime.now())
+                secs = (datetime.now()-datetime(1970,1,1)).total_seconds()
+                df.insert(0, "Time", secs)
                 right_hand_csv_header = not exists(RIGHT_HAND_FILE_NAME)
                 df.to_csv(RIGHT_HAND_FILE_NAME, mode='a', index=False, header = right_hand_csv_header)
-
-        if self.left_hand.position != None:
-            self.left_hand_pub.publish(self.left_hand)
-            if WRITE_TO_CSV:
-                data = {"Left_"+HAND_JOINTS_NAMES[0]: [self.left_hand.position[0]], "Left_"+HAND_JOINTS_NAMES[1]: [self.left_hand.position[1]]}
-                df = pd.DataFrame(data) 
-                df.insert(0, "Time", datetime.now())
-                left_hand_csv_header = not exists(LEFT_HAND_FILE_NAME)
-                df.to_csv(LEFT_HAND_FILE_NAME, mode='a', index=False, header = left_hand_csv_header)
         
         if self.torso != None:
             self.torso_pub.publish(self.torso)
             if WRITE_TO_CSV:
                 data = {'Torso': [self.torso]}
                 df = pd.DataFrame(data) 
-                df.insert(0, "Time", datetime.now())
+                secs = (datetime.now()-datetime(1970,1,1)).total_seconds()
+                df.insert(0, "Time", secs)
                 torso_csv_header = not exists(TORSO_FILE_NAME)
                 df.to_csv(TORSO_FILE_NAME, mode='a', index=False, header = torso_csv_header)
 
@@ -417,7 +422,7 @@ class OcraAngles():
         y_origin = np.array([0,1,0]) #elbow y axis
 
         #Get the angle between the y axis of elbow and the y axis of wrist
-        return np.abs(self.angle_between_vectors(y,y_origin)*180/np.pi -90)
+        return self.angle_between_vectors(y,y_origin)*180/np.pi
     
     def computeRotation(self,tf_wrist_in_elbow):
         #Get the vector from shoulder to elbow
@@ -463,7 +468,7 @@ if __name__ == "__main__":
     LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_arm.csv"
     RIGHT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_right_arm.csv"
     TORSO_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_torso.csv"
-    LEFT_HAND_FILE_NAME = LEFT_ARM_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_hand.csv"
+    LEFT_HAND_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_left_hand.csv"
     RIGHT_HAND_FILE_NAME = PATH_TO_FILE+DATE_STR+CAMERA+"_ocra_right_hand.csv"
 
     #Publish on
